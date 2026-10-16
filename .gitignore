@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Temporary and Media files
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.srt
+*.lock
+
+# Build & Model files
+models/*.bin
+*.bin
+
+# Logs
+*.log
+*.err
+
+# IDE
+.vscode/
+.idea/
+.gemini/
+scratch/
