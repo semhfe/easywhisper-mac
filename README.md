@@ -5,7 +5,7 @@
 [![Model](https://img.shields.io/badge/Model-ggml--large--v3--turbo-orange?style=flat-square)](https://huggingface.co/ggerganov/whisper.cpp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
-Mac'inizdeki ders, toplantı ve video kayıtlarınızı (`.mp4`, `.mkv`, `.mov`) **tamamen yerel**, **Apple Silicon Metal GPU hızlandırmalı** `whisper.cpp` (`ggml-large-v3-turbo`) ve `Silero VAD` ile zaman damgalı `.srt` altyazılarına dönüştüren hepsi bir arada macOS otomasyonu.
+Mac'inizdeki tüm video (`.mp4`, `.mkv`, `.mov`, `.avi`, `.webm`) ve ses kayıtlarınızı (`.mp3`, `.wav`, `.m4a`, `.aac`, `.flac`, `.ogg`) **tamamen yerel**, **Apple Silicon Metal GPU hızlandırmalı** `whisper.cpp` (`ggml-large-v3-turbo`) ve `Silero VAD` ile zaman damgalı `.srt` altyazılarına ve düz metin dökümlerine (`.txt`) dönüştüren hepsi bir arada macOS otomasyonu.
 
 > 🔒 **%100 Gizlilik:** Hiçbir ses veya veri buluta gitmez, tüm işlem Mac'inizin yerel donanımı üzerinde gerçekleşir.
 
@@ -28,16 +28,20 @@ cd easywhisper-mac
 
 ---
 
-## 🚀 Özellikler
+## 🚀 Yeni Özellikler (v1.1)
 
-- **🖱️ Finder Sağ Tık Entegrasyonu (Quick Action):** Videoya sağ tıklayıp *"EasyWhisper - Altyazı Üret"* demeniz yeterli.
-- **📂 Masaüstü Droplet Uygulaması (`EasyWhisper.app`):** Videoları uygulamanın simgesine sürükleyip bırakarak anında transkripsiyon başlatın.
-- **📥 Otomatik İzlenen Klasör (`EasyWhisper_Watch`):** Masaüstündeki bu klasöre atılan veya indirilen videolar otomatik olarak algılanıp altyazısı yanına oluşturulur.
-- **🖥️ Canlı Akış Terminal Penceresi:** Transkripsiyon anında canlı yüzde ilerlemesi (`progress = %45`) ve konuşulan metinler zaman damgalarıyla Terminal penceresinde anlık akar.
+- **🖱️ Finder Sağ Tık Entegrasyonu:** Herhangi bir video veya ses dosyasına sağ tıklayıp *"EasyWhisper - SRT Üret"* demeniz yeterli.
+- **🎵 Doğrudan Ses Desteği & Akıllı Geçiş (Smart Bypass):** `.mp3`, `.wav`, `.ogg`, `.flac` gibi doğrudan desteklenen ses formatlarında ffmpeg video ayrıştırma adımı atlanır ve doğrudan transkripsiyona başlanır.
+- **⚙️ Çift Tık Ayarlar Paneli (Native UI):** Masaüstündeki `EasyWhisper.app` simgesine çift tıkladığınızda yerel macOS ayar penceresi açılır:
+  - `[ ] Ayrıştırılan ses dosyasını (.wav) sakla (KEEP_AUDIO)`
+  - `[ ] Düz metin (.txt) dökümü de üret (OUTPUT_TXT)`
+  - `Model Dili Seçimi (Türkçe, İngilizce, Otomatik Algıla)`
+- **📂 Masaüstü Droplet Uygulaması (`EasyWhisper.app`):** Medya dosyalarını simgenin üzerine sürükleyip bırakarak anında transkripsiyon başlatın.
+- **📥 Otomatik İzlenen Klasör (`EasyWhisper_Watch`):** Masaüstündeki bu klasöre atılan veya indirilen video/ses dosyaları otomatik olarak algılanıp altyazısı yanına oluşturulur.
+- **🖥️ Canlı Akış Terminal Penceresi:** Transkripsiyon anında canlı ilerleme ve konuşulan metinler zaman damgalarıyla renkli Terminal penceresinde anlık akar.
 - **🛡️ Silero VAD (Voice Activity Detection):** Sessiz anlarda modelin halüsinasyon görmesini ve altyazı zaman damgalarının kaymasını önler.
 - **⚡ M-Serisi Metal GPU Hızlandırması:** Apple Silicon (M1, M2, M3, M4) çipleri üzerinde maksimum performans.
 - **🔔 macOS Bildirimleri & Finder Gösterimi:** İşlem tamamlandığında sesli uyarı ("Glass") çalar ve oluşan `.srt` dosyası Finder'da seçili olarak açılır.
-- **🔒 Güvenli Dosya Kilitleme:** İndirilmekte olan (`.crdownload`, `.part`, `.download`) dosyalar atlanır ve yarış durumlarını (race condition) engelleyen `.lock` mekanizması kullanılır.
 
 ---
 
@@ -45,20 +49,25 @@ cd easywhisper-mac
 
 | Yöntem | Nasıl Yapılır? |
 |---|---|
-| **Finder Sağ Tık** | Finder'da videoya sağ tıklayın ➔ **Hızlı Eylemler (Quick Actions)** ➔ **EasyWhisper - Altyazı Üret** |
-| **Sürükle-Bırak** | Videoyu Masaüstündeki **EasyWhisper.app** simgesi üzerine bırakın |
-| **Otomatik Klasör** | Videoları Masaüstündeki **`EasyWhisper_Watch`** klasörüne taşıyın |
-| **Terminal (CLI)** | `easywhisper /path/to/video.mp4` |
+| **Finder Sağ Tık** | Finder'da video veya ses dosyasına sağ tıklayın ➔ **Hızlı Eylemler (Quick Actions)** ➔ **EasyWhisper - SRT Üret** |
+| **Sürükle-Bırak** | Medyaları Masaüstündeki **EasyWhisper.app** simgesi üzerine bırakın |
+| **Ayarlar Paneli** | Masaüstündeki **EasyWhisper.app** simgesine **çift tıklayın** |
+| **Otomatik Klasör** | Medyaları Masaüstündeki **`EasyWhisper_Watch`** klasörüne taşıyın |
+| **Terminal (CLI)** | `easywhisper /path/to/media.mp4` |
 
 ---
 
-## ⚙️ Yapılandırma
+## ⚙️ Yapılandırma (`config.env`)
 
-Ayarlarınızı `~/.config/easywhisper/config.env` dosyasından dilediğiniz zaman değiştirebilirsiniz:
+Ayarlarınızı arayüzden veya doğrudan `~/.config/easywhisper/config.env` dosyasından dilediğiniz zaman değiştirebilirsiniz:
 
 ```bash
 # Dil seçimi (tr, en, auto vb.)
 LANGUAGE="tr"
+
+# Ekstra Çıktı Ayarları
+KEEP_AUDIO="false"      # true yapılırsa videodan ayrıştırılan .wav silinmez, videonun yanında saklanır
+OUTPUT_TXT="false"      # true yapılırsa .srt'nin yanında .txt düz metin dökümü de oluşturulur
 
 # Model yolları
 WHISPER_BIN="/opt/homebrew/bin/whisper-cli"

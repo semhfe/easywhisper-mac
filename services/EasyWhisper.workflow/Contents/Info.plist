@@ -16,7 +16,7 @@
 			<key>NSMenuItem</key>
 			<dict>
 				<key>default</key>
-				<string>EasyWhisper - Altyazı Üret</string>
+				<string>EasyWhisper - SRT Üret</string>
 			</dict>
 			<key>NSMessage</key>
 			<string>runWorkflowAsService</string>
@@ -28,6 +28,7 @@
 			<key>NSSendFileTypes</key>
 			<array>
 				<string>public.movie</string>
+				<string>public.audio</string>
 			</array>
 		</dict>
 	</array>

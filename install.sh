@@ -124,7 +124,8 @@ echo "   ✓ Whisper modeli hazır: $TURBO_MODEL"
 
 # 5. Konfigürasyon Dosyası Oluşturma
 echo ">> [4/6] Konfigürasyon dosyası kaydediliyor (~/.config/easywhisper/config.env)..."
-cat << EOF > "$HOME/.config/easywhisper/config.env"
+if [[ ! -f "$HOME/.config/easywhisper/config.env" ]]; then
+    cat << EOF > "$HOME/.config/easywhisper/config.env"
 # EasyWhisper Yapılandırması
 WHISPER_BIN="$WHISPER_BIN"
 MODEL_PATH="$TURBO_MODEL"
@@ -133,7 +134,15 @@ LANGUAGE="tr"
 PROMPT="Keep original language. No translation."
 ENTROPY_THRESHOLD="2.8"
 MAX_CONTEXT="64"
+KEEP_AUDIO="false"
+OUTPUT_TXT="false"
 EOF
+else
+    # Mevcut config varsa koru, eksik anahtarları ekle
+    touch "$HOME/.config/easywhisper/config.env"
+    grep -q "^KEEP_AUDIO=" "$HOME/.config/easywhisper/config.env" || echo 'KEEP_AUDIO="false"' >> "$HOME/.config/easywhisper/config.env"
+    grep -q "^OUTPUT_TXT=" "$HOME/.config/easywhisper/config.env" || echo 'OUTPUT_TXT="false"' >> "$HOME/.config/easywhisper/config.env"
+fi
 
 # 6. Komut Satırı Motorunu Kurma
 echo ">> [5/6] Motor ve tetikleyiciler yükleniyor..."
@@ -143,16 +152,16 @@ chmod +x "$HOME/.local/bin/easywhisper"
 ln -sf "$HOME/.local/bin/easywhisper" "$HOME/.local/bin/ders_srt_uret.sh"
 
 # Droplet Uygulamasını Derleme (Masaüstü)
+rm -rf "$HOME/Desktop/Ders SRT Üret.app" 2>/dev/null || true
 "$SCRIPT_DIR/app/build_droplet.sh" "EasyWhisper.app" "$HOME/Desktop"
-# Eski isimle de Masaüstünde güncel tutalım
-ln -sf "$HOME/Desktop/EasyWhisper.app" "$HOME/Desktop/Ders SRT Üret.app" 2>/dev/null || true
 
 # Finder Hızlı Eylemi (Quick Action)
 rm -rf "$HOME/Library/Services/EasyWhisper.workflow"
+rm -rf "$HOME/Library/Services/Ders SRT Uret.workflow" 2>/dev/null || true
 cp -R "$SCRIPT_DIR/services/EasyWhisper.workflow" "$HOME/Library/Services/EasyWhisper.workflow"
 
 # pbs servisine kaydet
-defaults write pbs NSServicesStatus -dict-add '"com.easywhisper.service - EasyWhisper - Altyazı Üret - runWorkflowAsService"' '{ "enabled_context_menu" = 1; "enabled_services_menu" = 1; }'
+defaults write pbs NSServicesStatus -dict-add '"com.easywhisper.service - EasyWhisper - SRT Üret - runWorkflowAsService"' '{ "enabled_context_menu" = 1; "enabled_services_menu" = 1; }'
 defaults write pbs FinderActive -dict-add '"com.easywhisper.service"' 1
 
 # LaunchAgent Yapılandırması
@@ -174,8 +183,9 @@ echo -e "\033[1;32m  🎉 EasyWhisper Başarıyla Kuruldu!\033[0m"
 echo -e "\033[1;32m============================================================\033[0m"
 echo ""
 echo "Kullanabileceğiniz Yöntemler:"
-echo "  1. 🖱️  Finder Sağ Tık: Herhangi bir videoya sağ tıklayıp 'EasyWhisper - Altyazı Üret' seçin."
-echo "  2. 📂 Masaüstü Sürükle-Bırak: Videoyu Masaüstündeki 'EasyWhisper.app' simgesine bırakın."
-echo "  3. 📥 Otomatik Klasör: Videoları '~/Desktop/EasyWhisper_Watch' klasörüne atın."
-echo "  4. 💻 Terminal: ~/.local/bin/easywhisper <video_yolu>"
+echo "  1. 🖱️  Finder Sağ Tık: Herhangi bir video veya ses dosyasına sağ tıklayıp 'EasyWhisper - SRT Üret' seçin."
+echo "  2. 📂 Masaüstü Sürükle-Bırak: Medyaları Masaüstündeki 'EasyWhisper.app' simgesine bırakın."
+echo "  3. ⚙️  Ayarlar Paneli: 'EasyWhisper.app' simgesine çift tıklayarak ayarları (WAV saklama, TXT, Dil) yapılandırın."
+echo "  4. 📥 Otomatik Klasör: Medyaları '~/Desktop/EasyWhisper_Watch' klasörüne atın."
+echo "  5. 💻 Terminal: ~/.local/bin/easywhisper <medya_yolu>"
 echo ""

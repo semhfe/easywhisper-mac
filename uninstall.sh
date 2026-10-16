@@ -18,9 +18,12 @@ rm -rf "$HOME/Library/Services/EasyWhisper.workflow"
 
 # Masaüstü Droplet uygulamasını sil
 rm -rf "$HOME/Desktop/EasyWhisper.app"
+rm -rf "$HOME/Desktop/Ders SRT Üret.app"
+rm -rf "$HOME/Library/Services/Ders SRT Uret.workflow"
 
 # Binary sil
 rm -f "$HOME/.local/bin/easywhisper"
+rm -f "$HOME/.local/bin/ders_srt_uret.sh"
 
 echo -e "\033[1;32m✓ EasyWhisper tetikleyicileri ve komutları başarıyla kaldırıldı.\033[0m"
 

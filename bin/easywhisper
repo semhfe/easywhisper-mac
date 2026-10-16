@@ -22,6 +22,8 @@ LANGUAGE="${LANGUAGE:-tr}"
 PROMPT="${PROMPT:-Keep original language. No translation.}"
 ENTROPY_THRESHOLD="${ENTROPY_THRESHOLD:-2.8}"
 MAX_CONTEXT="${MAX_CONTEXT:-64}"
+KEEP_AUDIO="${KEEP_AUDIO:-false}"
+OUTPUT_TXT="${OUTPUT_TXT:-false}"
 
 # Otomatik whisper-cli tespiti
 if [[ -z "$WHISPER_BIN" || ! -x "$WHISPER_BIN" ]]; then
@@ -97,19 +99,21 @@ notify_error() {
     osascript -e "display notification \"$msg\" with title \"$title\" sound name \"Basso\"" 2>/dev/null || true
 }
 
-# Tek bir videoyu işleyen ana fonksiyon
-process_video() {
-    local video_path="$1"
+# Tek bir medya dosyasını (video veya ses) işleyen ana fonksiyon
+process_media() {
+    local media_path="$1"
 
-    if [[ ! -f "$video_path" ]]; then
-        echo "\033[1;31m[HATA] Dosya bulunamadı: $video_path\033[0m" >&2
+    if [[ ! -f "$media_path" ]]; then
+        echo "\033[1;31m[HATA] Dosya bulunamadı: $media_path\033[0m" >&2
         return 1
     fi
 
-    local filename=$(basename "$video_path")
-    local dirpath=$(dirname "$video_path")
-    local base_no_ext="${video_path:r}"
+    local filename=$(basename "$media_path")
+    local dirpath=$(dirname "$media_path")
+    local base_no_ext="${media_path:r}"
+    local ext="${filename:e:l}"
     local srt_path="${base_no_ext}.srt"
+    local txt_path="${base_no_ext}.txt"
     local lock_path="${base_no_ext}.lock"
 
     # Zaten .srt üretilmişse atla
@@ -133,9 +137,32 @@ process_video() {
     # Kilit oluştur
     echo "$$" > "$lock_path"
 
-    local tmp_wav="/tmp/whisper_$(date +%s)_$$.wav"
+    local is_direct_audio=false
+    # whisper-cli doğrudan wav, mp3, ogg, flac formatlarını okuyabilir
+    if [[ "$ext" == "wav" || "$ext" == "mp3" || "$ext" == "ogg" || "$ext" == "flac" ]]; then
+        is_direct_audio=true
+    fi
+
+    local audio_input=""
+    local tmp_wav=""
+
+    if [[ "$is_direct_audio" == true ]]; then
+        audio_input="$media_path"
+    else
+        if [[ "$KEEP_AUDIO" == "true" || "$KEEP_AUDIO" == "1" ]]; then
+            # Ayrıştırılan ses dosyasını medyanın yanında kalıcı tut
+            audio_input="${base_no_ext}.wav"
+        else
+            tmp_wav="/tmp/whisper_$(date +%s)_$$.wav"
+            audio_input="$tmp_wav"
+        fi
+    fi
+
     cleanup() {
-        rm -f "$tmp_wav" "$lock_path" 2>/dev/null || true
+        if [[ -n "$tmp_wav" && -f "$tmp_wav" ]]; then
+            rm -f "$tmp_wav" 2>/dev/null || true
+        fi
+        rm -f "$lock_path" 2>/dev/null || true
     }
     trap cleanup EXIT INT TERM
 
@@ -143,25 +170,32 @@ process_video() {
     echo "\033[1;36m============================================================\033[0m"
     echo "\033[1;32m  🎙️  EASYWHISPER - CANLI ALTYAZI AKIŞI\033[0m"
     echo "\033[1;36m============================================================\033[0m"
-    echo "📁 Video: \033[1m$filename\033[0m"
+    echo "📁 Medya: \033[1m$filename\033[0m"
     echo "⚙️  Model: $(basename "$MODEL_PATH") | Dil: $LANGUAGE"
     [[ -n "$VAD_MODEL_PATH" ]] && echo "🛡️  VAD:   $(basename "$VAD_MODEL_PATH") (Silero)"
+    [[ "$KEEP_AUDIO" == "true" || "$KEEP_AUDIO" == "1" ]] && echo "💾 Ses:   Kalıcı WAV saklanacak"
+    [[ "$OUTPUT_TXT" == "true" || "$OUTPUT_TXT" == "1" ]] && echo "📝 Metin: Düz .txt dökümü aktif"
     echo "------------------------------------------------------------"
     notify_start "$filename"
 
-    # 1. ffmpeg ile 16kHz mono pcm_s16le WAV oluştur
-    echo "\033[1;33m>> [1/2] 🔊 Ses ayrıştırılıyor (ffmpeg 16kHz Mono WAV)...\033[0m"
-    if ! ffmpeg -y -loglevel error -i "$video_path" -vn -ar 16000 -ac 1 -c:a pcm_s16le "$tmp_wav"; then
-        echo "\033[1;31m[HATA] ffmpeg ses dönüştürme başarısız oldu: $video_path\033[0m" >&2
-        notify_error "$filename (ffmpeg hatası)"
-        cleanup
-        trap - EXIT INT TERM
-        return 1
+    # 1. Ses hazırlığı / ffmpeg akıllı bypass
+    if [[ "$is_direct_audio" == true ]]; then
+        echo "\033[1;32m>> [1/2] ⚡ Uyumlu ses formatı algılandı ($ext), ffmpeg adımı atlanıyor...\033[0m"
+    else
+        echo "\033[1;33m>> [1/2] 🔊 Ses ayrıştırılıyor (ffmpeg -> 16kHz Mono WAV)...\033[0m"
+        if ! ffmpeg -y -loglevel error -i "$media_path" -vn -ar 16000 -ac 1 -c:a pcm_s16le "$audio_input"; then
+            echo "\033[1;31m[HATA] ffmpeg ses dönüştürme başarısız oldu: $media_path\033[0m" >&2
+            notify_error "$filename (ffmpeg hatası)"
+            cleanup
+            trap - EXIT INT TERM
+            return 1
+        fi
     fi
 
-    # 2. whisper.cpp ile SRT üret
+    # 2. whisper.cpp ile SRT (ve opsiyonel TXT) üret
     echo "\033[1;33m>> [2/2] 🧠 Whisper transkripsiyonu çalışıyor (Canlı Akış)...\033[0m"
     echo ""
+
     local vad_args=()
     if [[ -n "$VAD_MODEL_PATH" && -f "$VAD_MODEL_PATH" ]]; then
         vad_args=(--vad -vm "$VAD_MODEL_PATH")
@@ -172,18 +206,23 @@ process_video() {
         prompt_args=(--prompt "$PROMPT")
     fi
 
+    local output_args=(-osrt)
+    if [[ "$OUTPUT_TXT" == "true" || "$OUTPUT_TXT" == "1" ]]; then
+        output_args+=(-otxt)
+    fi
+
     if ! "$WHISPER_BIN" \
         -m "$MODEL_PATH" \
         "${vad_args[@]}" \
         -l "$LANGUAGE" \
-        -osrt \
+        "${output_args[@]}" \
         -pp \
         -pc \
         "${prompt_args[@]}" \
         -et "$ENTROPY_THRESHOLD" -mc "$MAX_CONTEXT" \
-        -f "$tmp_wav" \
+        -f "$audio_input" \
         -of "$base_no_ext"; then
-        echo "\033[1;31m[HATA] whisper.cpp işlemi başarısız oldu: $video_path\033[0m" >&2
+        echo "\033[1;31m[HATA] whisper.cpp işlemi başarısız oldu: $media_path\033[0m" >&2
         notify_error "$filename (whisper hatası)"
         cleanup
         trap - EXIT INT TERM
@@ -196,8 +235,14 @@ process_video() {
     if [[ -f "$srt_path" ]]; then
         echo ""
         echo "\033[1;32m============================================================\033[0m"
-        echo "\033[1;32m  ✅ ALTYAZI BAŞARIYLA OLUŞTURULDU!\033[0m"
-        echo "\033[1;32m  📄 Dosya: $srt_path\033[0m"
+        echo "\033[1;32m  ✅ İŞLEM BAŞARIYLA TAMAMLANDI!\033[0m"
+        echo "\033[1;32m  📄 Altyazı: $srt_path\033[0m"
+        if [[ -f "$txt_path" ]]; then
+            echo "\033[1;32m  📝 Döküm:   $txt_path\033[0m"
+        fi
+        if [[ ("$KEEP_AUDIO" == "true" || "$KEEP_AUDIO" == "1") && "$is_direct_audio" == false && -f "${base_no_ext}.wav" ]]; then
+            echo "\033[1;32m  🔊 Ses:     ${base_no_ext}.wav\033[0m"
+        fi
         echo "\033[1;32m============================================================\033[0m"
         notify_done "$(basename "$srt_path")"
         open -R "$srt_path" 2>/dev/null || true
@@ -234,35 +279,35 @@ scan_directory() {
     trap scan_cleanup EXIT INT TERM
 
     setopt null_glob nocaseglob
-    local video_files=("$target_dir"/*.(mp4|mkv|mov|avi|webm|m4v))
+    local media_files=("$target_dir"/*.(mp4|mkv|mov|avi|webm|m4v|mp3|wav|m4a|aac|flac|ogg))
     unsetopt nocaseglob null_glob
 
-    for video in "${video_files[@]}"; do
-        [[ -f "$video" ]] || continue
+    for media in "${media_files[@]}"; do
+        [[ -f "$media" ]] || continue
 
-        local fname=$(basename "$video")
+        local fname=$(basename "$media")
 
         if [[ "$fname" == *.crdownload || "$fname" == *.part || "$fname" == *.download || "$fname" == .* ]]; then
             continue
         fi
 
-        local sz1=$(stat -f %z "$video" 2>/dev/null || echo 0)
+        local sz1=$(stat -f %z "$media" 2>/dev/null || echo 0)
         if [[ "$sz1" -eq 0 ]]; then
             continue
         fi
         sleep 1
-        local sz2=$(stat -f %z "$video" 2>/dev/null || echo 0)
+        local sz2=$(stat -f %z "$media" 2>/dev/null || echo 0)
         if [[ "$sz1" -ne "$sz2" ]]; then
             echo "[BİLGİ] Dosya henüz indiriliyor/yazılıyor: $fname"
             continue
         fi
 
-        if lsof "$video" 2>/dev/null | grep -qE " (W|u) "; then
+        if lsof "$media" 2>/dev/null | grep -qE " (W|u) "; then
             echo "[BİLGİ] Dosyaya aktif yazma işlemi sürüyor: $fname"
             continue
         fi
 
-        process_video "$video" || true
+        process_media "$media" || true
     done
 
     scan_cleanup
@@ -276,12 +321,27 @@ scan_directory() {
 if [[ $# -eq 0 ]]; then
     echo "EasyWhisper CLI"
     echo "Kullanım:"
-    echo "  $0 <video_dosyasi_1> [video_dosyasi_2 ...]"
+    echo "  $0 <medya_dosyasi_1> [medya_dosyasi_2 ...]"
     echo "  $0 --scan-dir <klasor_yolu>"
+    echo "  $0 --settings"
     exit 1
 fi
 
-if [[ "$1" == "--scan-dir" ]]; then
+if [[ "$1" == "--settings" || "$1" == "--config" ]]; then
+    if [[ -d "$HOME/Desktop/EasyWhisper.app" ]]; then
+        open "$HOME/Desktop/EasyWhisper.app"
+    elif [[ -d "/Applications/EasyWhisper.app" ]]; then
+        open "/Applications/EasyWhisper.app"
+    else
+        echo "[BİLGİ] Yapılandırma dosyası: $CONFIG_FILE"
+        if [[ -f "$CONFIG_FILE" ]]; then
+            cat "$CONFIG_FILE"
+        else
+            echo "Yapılandırma dosyası henüz oluşturulmamış."
+        fi
+    fi
+    exit 0
+elif [[ "$1" == "--scan-dir" ]]; then
     if [[ -z "$2" ]]; then
         echo "[HATA] --scan-dir için klasör yolu belirtilmedi." >&2
         exit 1
@@ -289,7 +349,7 @@ if [[ "$1" == "--scan-dir" ]]; then
     scan_directory "$2"
 else
     for arg in "$@"; do
-        process_video "$arg"
+        process_media "$arg"
     done
 
     if [[ -t 0 || -t 1 ]]; then
